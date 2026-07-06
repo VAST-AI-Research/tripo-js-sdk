@@ -1,0 +1,52 @@
+{
+  "name": "tripo3d-sdk-js",
+  "version": "0.1.0",
+  "description": "Unofficial JavaScript SDK for the Tripo3D v3 AI 3D generation API (openapi.tripo3d.com/v3).",
+  "type": "module",
+  "main": "./src/index.js",
+  "module": "./src/index.js",
+  "types": "./types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./types/index.d.ts",
+      "import": "./src/index.js"
+    },
+    "./errors": {
+      "import": "./src/errors.js"
+    },
+    "./constants": {
+      "import": "./src/constants.js"
+    }
+  },
+  "files": [
+    "src",
+    "types",
+    "README.md",
+    "README.zh-CN.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "example:text": "node examples/text-to-model.js",
+    "example:image": "node examples/image-to-model.js",
+    "example:rig": "node examples/rig-and-animate.js"
+  },
+  "keywords": [
+    "tripo3d",
+    "tripo",
+    "3d",
+    "ai",
+    "sdk",
+    "text-to-3d",
+    "image-to-3d",
+    "rigging",
+    "animation",
+    "glb",
+    "fbx"
+  ],
+  "author": "Community",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  }
+}
