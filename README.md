@@ -309,8 +309,6 @@ test/              # node --test suite
 ## Reference
 
 - API docs: https://developers.tripo3d.ai/en/docs/introduction
-- Endpoint details: https://docs.tripo3d.ai/
-- Tripo console: https://platform.tripo3d.ai/
 - API base URL (global): `https://openapi.tripo3d.ai/v3`
 - API base URL (China): `https://openapi.tripo3d.com/v3`
 

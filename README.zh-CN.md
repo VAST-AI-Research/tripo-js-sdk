@@ -355,8 +355,6 @@ test/              # node --test 用例集
 ## 相关链接
 
 - API 文档：https://developers.tripo3d.com/zh/docs/introduction
-- 每个端点参数细节：https://docs.tripo3d.com/
-- Tripo 控制台：https://platform.tripo3d.com/
 - API 端点（国内）：`https://openapi.tripo3d.com/v3`
 - API 端点（海外）：`https://openapi.tripo3d.ai/v3`
 
