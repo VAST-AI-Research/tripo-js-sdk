@@ -1,7 +1,7 @@
 {
   "name": "tripo3d-sdk-js",
   "version": "0.1.0",
-  "description": "Unofficial JavaScript SDK for the Tripo3D v3 AI 3D generation API (openapi.tripo3d.com/v3).",
+  "description": "Official JavaScript / TypeScript SDK for the Tripo3D v3 AI 3D generation API.",
   "type": "module",
   "main": "./src/index.js",
   "module": "./src/index.js",

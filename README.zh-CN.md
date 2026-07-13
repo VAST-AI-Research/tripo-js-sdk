@@ -2,7 +2,7 @@
 
 [English](./README.md) · **简体中文**
 
-一个非官方的、轻量的 **JavaScript / TypeScript SDK**，用于访问 [Tripo3D v3 API](https://developers.tripo3d.com/zh/docs/introduction) —— 覆盖 AI 3D 生成的完整能力：文生 3D、图生 3D、多视角生 3D、重贴图、网格编辑、自动绑骨与动画重定向。
+Tripo 官方轻量 **JavaScript / TypeScript SDK**，用于访问 [Tripo3D v3 API](https://developers.tripo3d.com/zh/docs/introduction) —— 覆盖 AI 3D 生成的完整能力：文生 3D、图生 3D、多视角生 3D、重贴图、网格编辑、自动绑骨与动画重定向。
 
 - **零运行时依赖**，直接使用平台内置 `fetch`。
 - 支持 Node.js ≥ 18、Bun、Deno 以及现代浏览器 / edge runtime。
@@ -12,7 +12,10 @@
 - 内置 `waitForTask()` 轮询器，支持进度回调与超时取消。
 - 与 [`tripo3d-sdk-rust`](../tripo3d-sdk-rust)、[`tripo3d-sdk-go`](../tripo3d-sdk-go) 是同源姊妹 SDK —— API 能力一致，各自遵循语言惯例。
 
-> Base URL：`https://openapi.tripo3d.com/v3` —— 本 SDK 面向 **v3** REST 接口（`developers.tripo3d.com`），**不是**旧的 `/v2/openapi/task` 接口。
+> 国内 Base URL：`https://openapi.tripo3d.com/v3`  
+> 海外 Base URL：`https://openapi.tripo3d.ai/v3`  
+> 本 SDK 面向 **v3** REST 接口，**不是**旧的 `/v2/openapi/task` 接口。  
+> 可通过 `baseUrl` 选择区域（见[客户端参数](#客户端参数)）。
 
 ---
 
@@ -26,7 +29,7 @@ pnpm add tripo3d-sdk-js
 yarn add tripo3d-sdk-js
 ```
 
-先在 [Tripo 控制台](https://platform.tripo3d.ai/) 创建 API Key，并作为环境变量导出：
+先在 [Tripo 控制台](https://platform.tripo3d.com/) 创建 API Key，并作为环境变量导出（海外请使用 [platform.tripo3d.ai](https://platform.tripo3d.ai/)）：
 
 ```bash
 export TRIPO_API_KEY="tsk_..."
@@ -67,7 +70,7 @@ console.log('预览渲染图：',   task.output.rendered_image_url);
 ```ts
 new TripoClient({
   apiKey?: string,                          // 默认读取 TRIPO_API_KEY 环境变量
-  baseUrl?: string,                         // 默认：https://openapi.tripo3d.com/v3
+  baseUrl?: string,                         // 国内：https://openapi.tripo3d.com/v3 · 海外：https://openapi.tripo3d.ai/v3
   fetch?: typeof globalThis.fetch,          // 可注入自定义 fetch（如 undici）
   timeoutMs?: number,                       // 单次请求超时，默认 60 秒
   retries?: number,                         // 5xx / 网络错误的额外重试次数，默认 2
@@ -351,10 +354,11 @@ test/              # node --test 用例集
 
 ## 相关链接
 
-- API 文档（中文）：https://developers.tripo3d.com/zh/docs/introduction
-- API 文档（英文）：https://developers.tripo3d.com/en/docs/introduction
-- 每个端点参数细节：https://docs.tripo3d.ai/
-- Tripo 控制台：https://platform.tripo3d.ai/
+- API 文档：https://developers.tripo3d.com/zh/docs/introduction
+- 每个端点参数细节：https://docs.tripo3d.com/
+- Tripo 控制台：https://platform.tripo3d.com/
+- API 端点（国内）：`https://openapi.tripo3d.com/v3`
+- API 端点（海外）：`https://openapi.tripo3d.ai/v3`
 
 ---
 
@@ -380,5 +384,3 @@ const { TripoClient } = await import('tripo3d-sdk-js');
 ## 许可协议
 
 MIT —— 见 `LICENSE`。
-
-本项目与 VAST AI / Tripo3D 官方**无隶属关系**，仅是为其公开的 v3 API 提供便捷的客户端封装。

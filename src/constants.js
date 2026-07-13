@@ -5,7 +5,7 @@
  * pure JavaScript environments — Node.js, browsers, edge runtimes, etc.
  */
 
-/** Default REST endpoint for the Tripo3D v3 openapi service. */
+/** Default REST endpoint (China). Overseas: `https://openapi.tripo3d.ai/v3`. */
 export const DEFAULT_BASE_URL = 'https://openapi.tripo3d.com/v3';
 
 /** Task lifecycle statuses returned by `GET /v3/tasks/{task_id}`. */
