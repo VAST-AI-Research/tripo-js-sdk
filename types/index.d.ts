@@ -1,5 +1,5 @@
 /**
- * Type definitions for `@tripo3d/sdk`.
+ * Type definitions for `@vastai/tripo-sdk`.
  *
  * These types mirror the JSDoc annotations in `src/` and expose them to
  * TypeScript / IDEs. They are intentionally permissive (`[key: string]: any`

@@ -1,5 +1,5 @@
 {
-  "name": "@tripo3d/sdk",
+  "name": "@vastai/tripo-sdk",
   "version": "0.1.0",
   "description": "Official JavaScript / TypeScript SDK for the Tripo3D v3 AI 3D generation API.",
   "type": "module",
