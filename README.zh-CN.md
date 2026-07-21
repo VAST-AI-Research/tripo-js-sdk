@@ -1,4 +1,4 @@
-# tripo3d-sdk-js
+# @tripo3d/sdk
 
 [English](./README.md) · **简体中文**
 
@@ -22,11 +22,11 @@ Tripo 官方轻量 **JavaScript / TypeScript SDK**，用于访问 [Tripo3D v3 AP
 ## 安装
 
 ```bash
-npm install tripo3d-sdk-js
+npm install @tripo3d/sdk
 # 或
-pnpm add tripo3d-sdk-js
+pnpm add @tripo3d/sdk
 # 或
-yarn add tripo3d-sdk-js
+yarn add @tripo3d/sdk
 ```
 
 先在 [Tripo 控制台](https://platform.tripo3d.com/) 创建 API Key，并作为环境变量导出（海外请使用 [platform.tripo3d.ai](https://platform.tripo3d.ai/)）：
@@ -40,7 +40,7 @@ export TRIPO_API_KEY="tsk_..."
 ## 快速开始
 
 ```js
-import { TripoClient, ModelVersion } from 'tripo3d-sdk-js';
+import { TripoClient, ModelVersion } from '@tripo3d/sdk';
 
 const client = new TripoClient(); // 默认读取 process.env.TRIPO_API_KEY
 
@@ -167,7 +167,7 @@ const taskId = await client.imageToModel({
 ```js
 import {
   TripoClient, Animation, ModelVersion, RigSpec, TaskStatus,
-} from 'tripo3d-sdk-js';
+} from '@tripo3d/sdk';
 
 const client = new TripoClient();
 
@@ -217,7 +217,7 @@ console.log('带动画的 GLB URLs：', anim.output.model_urls);
 ```js
 import {
   TripoAPIError, TripoTaskError, TripoTimeoutError, TripoRequestError,
-} from 'tripo3d-sdk-js';
+} from '@tripo3d/sdk';
 
 try {
   const id   = await client.textToModel({ prompt: '一把椅子' });
@@ -267,7 +267,7 @@ await client.waitForTask(id, { signal: ac.signal });
 import {
   TaskStatus, Animation, RigType, RigSpec,
   ModelVersion, OutputFormat, TextureFormat,
-} from 'tripo3d-sdk-js';
+} from '@tripo3d/sdk';
 
 TaskStatus.SUCCESS         // 'success'
 Animation.WALK             // 'preset:walk'
@@ -374,7 +374,7 @@ test/              # node --test 用例集
 **Q：可以只做 CommonJS 项目吗？**
 本 SDK 是 ESM-only。CommonJS 项目可以用动态 `import()`：
 ```js
-const { TripoClient } = await import('tripo3d-sdk-js');
+const { TripoClient } = await import('@tripo3d/sdk');
 ```
 
 ---

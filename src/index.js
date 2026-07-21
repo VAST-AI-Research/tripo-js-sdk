@@ -1,9 +1,9 @@
 /**
- * tripo3d-sdk-js — public entry point.
+ * @tripo3d/sdk — public entry point.
  *
  * Named exports are the recommended way to use this SDK:
  *
- *   import { TripoClient, Animation, RigType } from 'tripo3d-sdk-js';
+ *   import { TripoClient, Animation, RigType } from '@tripo3d/sdk';
  *
  *   const client = new TripoClient({ apiKey: process.env.TRIPO_API_KEY });
  *   const taskId = await client.textToModel({ prompt: 'a cute cat' });

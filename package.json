@@ -1,5 +1,5 @@
 {
-  "name": "tripo3d-sdk-js",
+  "name": "@tripo3d/sdk",
   "version": "0.1.0",
   "description": "Official JavaScript / TypeScript SDK for the Tripo3D v3 AI 3D generation API.",
   "type": "module",
@@ -27,6 +27,7 @@
   ],
   "scripts": {
     "test": "node --test test/*.test.js",
+    "prepublishOnly": "npm test",
     "example:text": "node examples/text-to-model.js",
     "example:image": "node examples/image-to-model.js",
     "example:rig": "node examples/rig-and-animate.js"
@@ -44,8 +45,19 @@
     "glb",
     "fbx"
   ],
-  "author": "Community",
+  "author": "VAST AI <xuanwang868@gmail.com>",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/VAST-AI-Research/tripo-js-sdk.git"
+  },
+  "homepage": "https://github.com/VAST-AI-Research/tripo-js-sdk#readme",
+  "bugs": {
+    "url": "https://github.com/VAST-AI-Research/tripo-js-sdk/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "engines": {
     "node": ">=18"
   }

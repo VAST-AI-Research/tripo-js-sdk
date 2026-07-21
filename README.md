@@ -1,4 +1,4 @@
-# tripo3d-sdk-js
+# @tripo3d/sdk
 
 **English** · [简体中文](./README.zh-CN.md)
 
@@ -25,11 +25,11 @@ re-texturing, mesh editing, auto-rigging and animation retargeting.
 ## Installation
 
 ```bash
-npm install tripo3d-sdk-js
+npm install @tripo3d/sdk
 # or
-pnpm add tripo3d-sdk-js
+pnpm add @tripo3d/sdk
 # or
-yarn add tripo3d-sdk-js
+yarn add @tripo3d/sdk
 ```
 
 Then create an API key on the [Tripo console](https://platform.tripo3d.ai/) and
@@ -42,7 +42,7 @@ export TRIPO_API_KEY="tsk_..."
 ## Quick start
 
 ```js
-import { TripoClient, ModelVersion } from 'tripo3d-sdk-js';
+import { TripoClient, ModelVersion } from '@tripo3d/sdk';
 
 const client = new TripoClient({
   // reads process.env.TRIPO_API_KEY
@@ -171,7 +171,7 @@ const taskId = await client.imageToModel({ file: file_token, model: 'v3.1-202602
 ```js
 import {
   TripoClient, Animation, ModelVersion, RigSpec, TaskStatus,
-} from 'tripo3d-sdk-js';
+} from '@tripo3d/sdk';
 
 const client = new TripoClient();
 
@@ -215,7 +215,7 @@ console.log('Animated GLB URLs:', anim.output.model_urls);
 ```js
 import {
   TripoAPIError, TripoTaskError, TripoTimeoutError, TripoRequestError,
-} from 'tripo3d-sdk-js';
+} from '@tripo3d/sdk';
 
 try {
   const id   = await client.textToModel({ prompt: 'a chair' });
@@ -252,7 +252,7 @@ await client.waitForTask(id, { signal: ac.signal });
 import {
   TaskStatus, Animation, RigType, RigSpec,
   ModelVersion, OutputFormat, TextureFormat,
-} from 'tripo3d-sdk-js';
+} from '@tripo3d/sdk';
 
 TaskStatus.SUCCESS         // 'success'
 Animation.WALK             // 'preset:walk'
