@@ -12,7 +12,7 @@
 
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { TripoClient, TaskStatus } from '../src/index.js';
+import { TripoClient, TaskStatus, ImageModel } from '../src/index.js';
 
 const inputArg = process.argv[2];
 const prompt = process.argv.slice(3).join(' ') || 'turn it into a watercolor painting';
@@ -25,17 +25,21 @@ const client = new TripoClient();
 
 let fileRef;
 if (inputArg.startsWith('http://') || inputArg.startsWith('https://')) {
-  fileRef = { url: inputArg };
+  fileRef = inputArg;
 } else {
   const buffer = await readFile(inputArg);
   const contentType = guessContentType(inputArg);
   const upload = await client.uploadFile(buffer, { filename: path.basename(inputArg), contentType });
   console.log(`> uploaded, file_token=${upload.file_token}`);
-  fileRef = { file_token: upload.file_token };
+  fileRef = upload.file_token;
 }
 
 console.log(`> prompt: ${prompt}`);
-const taskId = await client.imageToImage({ file: fileRef, prompt });
+const taskId = await client.imageToImage({
+  input: fileRef,
+  model: ImageModel.SEEDREAM_V5,
+  prompt,
+});
 console.log(`> submitted, task_id=${taskId}`);
 
 const task = await client.waitForTask(taskId, {

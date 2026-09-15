@@ -159,7 +159,7 @@ export class TripoClient {
    *   texture_seed?: number,
    *   texture?: boolean,
    *   pbr?: boolean,
-   *   texture_quality?: 'standard' | 'detailed',
+   *   texture_quality?: 'standard' | 'detailed' | 'extreme',
    *   geometry_quality?: 'standard' | 'detailed',
    *   face_limit?: number,
    *   auto_size?: boolean,
@@ -168,6 +168,7 @@ export class TripoClient {
    *   generate_parts?: boolean,
    *   compress?: string,
    *   export_uv?: boolean,
+   *   export_orientation?: '+x' | '-x' | '+y' | '-y',
    *   style?: string,
    *   [key: string]: any,
    * }} params
@@ -183,17 +184,14 @@ export class TripoClient {
    * POST /v3/generation/image-to-model
    *
    * @param {{
-   *   file?: string | { file_token?: string, url?: string, object?: { bucket: string, key: string } },
-   *   image?: string,
-   *   file_token?: string,
-   *   url?: string,
+   *   input: string | { file_token?: string, url?: string, object?: { bucket: string, key: string } },
    *   model?: string,
    *   enable_image_autofix?: boolean,
    *   model_seed?: number,
    *   texture_seed?: number,
    *   texture?: boolean,
    *   pbr?: boolean,
-   *   texture_quality?: 'standard' | 'detailed',
+   *   texture_quality?: 'standard' | 'detailed' | 'extreme',
    *   texture_alignment?: 'original_image' | 'geometry',
    *   geometry_quality?: 'standard' | 'detailed',
    *   face_limit?: number,
@@ -204,18 +202,19 @@ export class TripoClient {
    *   generate_parts?: boolean,
    *   compress?: string,
    *   export_uv?: boolean,
+   *   export_orientation?: '+x' | '-x' | '+y' | '-y',
    *   style?: string,
    *   [key: string]: any,
    * }} params
    * @returns {Promise<string>} task_id
    */
   async imageToModel(params = {}) {
-    const { file, image, file_token, url, ...rest } = params;
-    const descriptor = file ?? image ?? file_token ?? url;
+    const { input, file, image, file_token, url, ...rest } = params;
+    const descriptor = input ?? file ?? image ?? file_token ?? url;
     if (!descriptor) {
-      throw new TypeError('imageToModel: provide `file`, `file_token`, or `url`.');
+      throw new TypeError('imageToModel: `input` is required (url, file_token, or task_id).');
     }
-    const payload = { file: toFileDescriptor(descriptor), ...rest };
+    const payload = { input: toFileDescriptor(descriptor), ...rest };
     const { task_id } = await this.#createTask('/generation/image-to-model', payload);
     return task_id;
   }
@@ -223,28 +222,46 @@ export class TripoClient {
   /**
    * POST /v3/generation/multiview-to-model
    *
-   * `files` must contain exactly 4 items in [front, left, back, right] order.
-   * Individual items can be omitted (empty object) except the front view.
+   * `inputs` must contain exactly 4 items in [front, left, back, right]
+   * order. The front view is mandatory and at least 2 views are required;
+   * pass `null` for the ones you want to skip.
+   *
+   * To reuse the 4-view output of an earlier `imageToMultiview` or
+   * `editMultiview` task, pass its id as `input_task_id` instead.
    *
    * @param {{
-   *   files?: Array<string | { file_token?: string, url?: string, object?: object } | null>,
-   *   original_task_id?: string,
+   *   inputs?: Array<string | { file_token?: string, url?: string, object?: object } | null>,
+   *   input_task_id?: string,
    *   model?: string,
    *   [key: string]: any,
    * }} params
    * @returns {Promise<string>} task_id
    */
   async multiviewToModel(params = {}) {
-    if (!params.files && !params.original_task_id) {
-      throw new TypeError('multiviewToModel: provide `files` (length 4) or `original_task_id`.');
+    const { inputs, input_task_id, ...rest } = params;
+    if (!inputs && !input_task_id) {
+      throw new TypeError('multiviewToModel: provide `inputs` (length 4) or `input_task_id`.');
     }
-    const payload = { ...params };
-    if (params.files) {
-      if (params.files.length !== 4) {
-        throw new RangeError('multiviewToModel: `files` must contain exactly 4 items [front, left, back, right].');
+    if (inputs && input_task_id) {
+      throw new TypeError('multiviewToModel: `inputs` and `input_task_id` are mutually exclusive.');
+    }
+
+    const payload = { ...rest };
+    if (inputs) {
+      if (inputs.length !== 4) {
+        throw new RangeError('multiviewToModel: `inputs` must contain exactly 4 items [front, left, back, right].');
       }
-      payload.files = params.files.map((f) => (f ? toFileDescriptor(f) : {}));
+      if (!inputs[0]) {
+        throw new TypeError('multiviewToModel: the front view (`inputs[0]`) is required.');
+      }
+      if (inputs.filter(Boolean).length < 2) {
+        throw new RangeError('multiviewToModel: at least 2 views are required.');
+      }
+      payload.inputs = inputs.map((f) => (f ? toFileDescriptor(f) : ''));
+    } else {
+      payload.inputs = [{ task_id: input_task_id }];
     }
+
     const { task_id } = await this.#createTask('/generation/multiview-to-model', payload);
     return task_id;
   }
@@ -253,46 +270,123 @@ export class TripoClient {
 
   /**
    * POST /v3/generation/text-to-image
-   * @param {{ prompt: string, model?: string, [k: string]: any }} params
+   *
+   * Several fields are only honoured by a subset of the `ImageModel`
+   * values: `quality` by `chat_image_2` and the 2.5 models (others reject
+   * the request), `background` by the 2.5 models, and `aspect_ratio` by
+   * the banana models — seedream and chat_image use `size` instead.
+   *
+   * @param {{
+   *   prompt?: string,
+   *   model?: string,
+   *   size?: string,
+   *   quality?: string,
+   *   background?: string,
+   *   aspect_ratio?: string,
+   *   output_format?: 'png' | 'jpeg',
+   *   watermark?: boolean,
+   *   template?: string,
+   *   [k: string]: any,
+   * }} params
    * @returns {Promise<string>} task_id
    */
   async textToImage(params) {
-    if (!params?.prompt) throw new TypeError('textToImage: `prompt` is required.');
+    if (!params?.prompt && !params?.template) {
+      throw new TypeError('textToImage: `prompt` is required unless `template` is set.');
+    }
     const { task_id } = await this.#createTask('/generation/text-to-image', params);
     return task_id;
   }
 
   /**
-   * POST /v3/generation/image-to-image — image style/edit transformation.
-   * @param {{ file?: any, prompt?: string, [k: string]: any }} params
+   * POST /v3/generation/image-to-image — edit, style transfer, or
+   * multi-image fusion.
+   *
+   * Pass one reference image as `input`, or several as `inputs` and refer
+   * to them from the prompt as `image[1]`, `image[2]` and so on. The
+   * ceiling depends on the model: 4 for seedream, 10 for banana, 16 for
+   * chat_image.
+   *
+   * Note that `seedream_v5` is the only seedream model this endpoint
+   * accepts — `seedream_v4` is text-to-image only.
+   *
+   * @param {{
+   *   input?: any,
+   *   inputs?: any[],
+   *   prompt?: string,
+   *   model?: string,
+   *   size?: string,
+   *   quality?: string,
+   *   background?: string,
+   *   aspect_ratio?: string,
+   *   output_format?: 'png' | 'jpeg',
+   *   template?: string,
+   *   [k: string]: any,
+   * }} params
    * @returns {Promise<string>} task_id
    */
   async imageToImage(params = {}) {
-    const { file, ...rest } = params;
-    const payload = file ? { file: toFileDescriptor(file), ...rest } : rest;
+    const { input, inputs, file, ...rest } = params;
+    const single = input ?? file;
+    if (!single && !inputs?.length) {
+      throw new TypeError('imageToImage: `input` or `inputs` is required.');
+    }
+    if (single && inputs?.length) {
+      throw new TypeError('imageToImage: `input` and `inputs` are mutually exclusive.');
+    }
+    if (!rest.prompt && !rest.template) {
+      throw new TypeError('imageToImage: `prompt` is required unless `template` is set.');
+    }
+
+    const payload = single
+      ? { input: toFileDescriptor(single), ...rest }
+      : { inputs: inputs.map(toFileDescriptor), ...rest };
     const { task_id } = await this.#createTask('/generation/image-to-image', payload);
     return task_id;
   }
 
   /**
    * POST /v3/generation/image-to-multiview
-   * @param {{ file?: any, [k: string]: any }} params
+   * @param {{ input?: any, [k: string]: any }} params
    * @returns {Promise<string>} task_id
    */
   async imageToMultiview(params = {}) {
-    const { file, ...rest } = params;
-    const payload = file ? { file: toFileDescriptor(file), ...rest } : rest;
+    const { input, file, ...rest } = params;
+    const descriptor = input ?? file;
+    if (!descriptor) {
+      throw new TypeError('imageToMultiview: `input` is required (url, file_token, or task_id).');
+    }
+    const payload = { input: toFileDescriptor(descriptor), ...rest };
     const { task_id } = await this.#createTask('/generation/image-to-multiview', payload);
     return task_id;
   }
 
   /**
-   * POST /v3/generation/edit-multiview — edit a previously generated multiview set.
-   * @param {{ original_task_id?: string, [k: string]: any }} params
+   * POST /v3/generation/edit-multiview — apply per-view edits to a
+   * previously generated multiview set.
+   *
+   * `input` must be the task_id of an earlier successful `imageToMultiview`
+   * or `editMultiview` task. The API documents file_token and URL inputs
+   * too, but the service currently rejects anything that is not a task_id.
+   *
+   * @param {{
+   *   input: string,
+   *   prompts: Array<{ prompt: string, view: 'front' | 'left' | 'back' | 'right' }>,
+   *   [k: string]: any,
+   * }} params
    * @returns {Promise<string>} task_id
    */
-  async editMultiview(params) {
-    const { task_id } = await this.#createTask('/generation/edit-multiview', params ?? {});
+  async editMultiview(params = {}) {
+    const { input, original_task_id, prompts, ...rest } = params;
+    const descriptor = input ?? original_task_id;
+    if (!descriptor) {
+      throw new TypeError('editMultiview: `input` is required (the task_id of a multiview task).');
+    }
+    if (!prompts?.length || prompts.length > 4) {
+      throw new RangeError('editMultiview: `prompts` must contain 1 to 4 items.');
+    }
+    const payload = { input: toFileDescriptor(descriptor), prompts, ...rest };
+    const { task_id } = await this.#createTask('/generation/edit-multiview', payload);
     return task_id;
   }
 

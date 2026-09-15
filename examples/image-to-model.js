@@ -37,7 +37,7 @@ if (inputArg.startsWith('http://') || inputArg.startsWith('https://')) {
 }
 
 const taskId = await client.imageToModel({
-  file: fileRef,
+  input: fileRef,
   model: ModelVersion.H3_1,
   texture: true,
   pbr: true,

@@ -73,10 +73,108 @@ export const ModelVersion: {
   readonly H3_1: 'v3.1-20260211';
   readonly H3_0: 'v3.0-20250812';
   readonly H2_5: 'v2.5-20250123';
-  readonly H2_0: 'v2.0-20240919';
   readonly P1: 'P1-20260311';
-  readonly TURBO_V1: 'Turbo-v1.0-20250506';
+  readonly P2: 'P2-20260801';
 };
+
+export const ImageModel: {
+  readonly SEEDREAM_V5: 'seedream_v5';
+  readonly BANANA: 'banana';
+  readonly BANANA_PRO: 'banana_pro';
+  readonly BANANA2: 'banana2';
+  readonly CHAT_IMAGE_2: 'chat_image_2';
+  readonly CHAT_IMAGE_2_5_FLARE: 'chat_image_2.5_flare';
+  readonly CHAT_IMAGE_2_5_SUNBURST: 'chat_image_2.5_sunburst';
+};
+
+export const ImageQuality: {
+  readonly LOW: 'low';
+  readonly MEDIUM: 'medium';
+  readonly HIGH: 'high';
+  readonly XHIGH: 'xhigh';
+  readonly MAX: 'max';
+};
+
+export const ImageBackground: {
+  readonly AUTO: 'auto';
+  readonly OPAQUE: 'opaque';
+  readonly TRANSPARENT: 'transparent';
+};
+
+export const ImageFormat: {
+  readonly PNG: 'png';
+  readonly JPEG: 'jpeg';
+};
+
+export const AspectRatio: {
+  readonly '1:1': '1:1';
+  readonly '2:3': '2:3';
+  readonly '3:2': '3:2';
+  readonly '3:4': '3:4';
+  readonly '4:3': '4:3';
+  readonly '4:5': '4:5';
+  readonly '5:4': '5:4';
+  readonly '9:16': '9:16';
+  readonly '16:9': '16:9';
+  readonly '21:9': '21:9';
+  readonly '1:8': '1:8';
+  readonly '1:4': '1:4';
+  readonly '4:1': '4:1';
+  readonly '8:1': '8:1';
+};
+
+export const ImageTemplate: {
+  readonly ASSET_EXTRACTION: 'asset_extraction';
+  readonly CHARACTER_COMPLETION: 'character_completion';
+  readonly T_POSE: 't_pose';
+  readonly VARIANTS: 'variants';
+  readonly FIGURE: 'figure';
+  readonly ENHANCE_3D: '3d_enhance';
+};
+
+export const ExportOrientation: {
+  readonly PLUS_X: '+x';
+  readonly MINUS_X: '-x';
+  readonly PLUS_Y: '+y';
+  readonly MINUS_Y: '-y';
+};
+
+export const TextureQuality: {
+  readonly STANDARD: 'standard';
+  readonly DETAILED: 'detailed';
+  readonly EXTREME: 'extreme';
+};
+
+export const GeometryQuality: {
+  readonly STANDARD: 'standard';
+  readonly DETAILED: 'detailed';
+};
+
+export const TextureAlignment: {
+  readonly ORIGINAL_IMAGE: 'original_image';
+  readonly GEOMETRY: 'geometry';
+};
+
+export const Orientation: {
+  readonly DEFAULT: 'default';
+  readonly ALIGN_IMAGE: 'align_image';
+};
+
+export const View: {
+  readonly FRONT: 'front';
+  readonly LEFT: 'left';
+  readonly BACK: 'back';
+  readonly RIGHT: 'right';
+};
+
+export type ImageModelValue = (typeof ImageModel)[keyof typeof ImageModel];
+export type ImageQualityValue = (typeof ImageQuality)[keyof typeof ImageQuality];
+export type ImageBackgroundValue = (typeof ImageBackground)[keyof typeof ImageBackground];
+export type ImageFormatValue = (typeof ImageFormat)[keyof typeof ImageFormat];
+export type AspectRatioValue = (typeof AspectRatio)[keyof typeof AspectRatio];
+export type ImageTemplateValue = (typeof ImageTemplate)[keyof typeof ImageTemplate];
+export type ExportOrientationValue = (typeof ExportOrientation)[keyof typeof ExportOrientation];
+export type ViewValue = (typeof View)[keyof typeof View];
 
 export const OutputFormat: {
   readonly GLTF: 'GLTF';
@@ -109,8 +207,19 @@ export interface FileDescriptor {
   type?: string;
 }
 
-/** Anything that can be passed as an image input in the SDK. */
+/**
+ * Anything that can be passed as an image or model reference. A bare
+ * string is forwarded untouched so the server can infer whether it is a
+ * public URL, a `file_token`, or the `task_id` of an earlier task whose
+ * output should be reused.
+ */
 export type FileInput = string | FileDescriptor;
+
+/** A single per-view edit instruction for `editMultiview`. */
+export interface MultiviewPrompt {
+  prompt: string;
+  view: ViewValue;
+}
 
 export interface TaskOutput {
   model?: string;
@@ -120,6 +229,12 @@ export interface TaskOutput {
   pbr_model?: string;
   rendered_image?: string;
   rendered_image_url?: string;
+  /**
+   * Output of the text-to-image and image-to-image endpoints. The 3D
+   * generation endpoints also populate it with the reference image they
+   * synthesised internally.
+   */
+  generated_image_url?: string;
   riggable?: boolean;
   rig_type?: string;
   [key: string]: any;
@@ -132,11 +247,19 @@ export interface Task {
   progress?: number;
   input?: Record<string, any>;
   output?: TaskOutput;
-  create_time?: number;
+  /**
+   * Credits consumed, a decimal with up to two places (e.g. 48.00). Parse
+   * it as a float — integer parsing truncates fractional credits.
+   */
+  credits_consumed?: number;
+  /** ISO 8601 creation time. */
+  created_at?: string;
+  /** ISO 8601 completion time; absent until the task reaches a terminal status. */
+  completed_at?: string;
   running_left_time?: number;
   queuing_num?: number;
   error_code?: number;
-  error_msg?: string;
+  error_message?: string;
   [key: string]: any;
 }
 
@@ -214,15 +337,14 @@ export interface TextToModelParams {
   generate_parts?: boolean;
   compress?: string;
   export_uv?: boolean;
+  export_orientation?: ExportOrientationValue;
   style?: string;
   [key: string]: any;
 }
 
 export interface ImageToModelParams {
-  file?: FileInput;
-  image?: string;
-  file_token?: string;
-  url?: string;
+  /** A public URL, a `file_token`, or the `task_id` of an earlier image task. */
+  input: FileInput;
   model?: string;
   enable_image_autofix?: boolean;
   model_seed?: number;
@@ -240,14 +362,89 @@ export interface ImageToModelParams {
   generate_parts?: boolean;
   compress?: string;
   export_uv?: boolean;
+  export_orientation?: ExportOrientationValue;
   style?: string;
   [key: string]: any;
 }
 
 export interface MultiviewToModelParams {
-  files?: Array<FileInput | null | undefined>;
-  original_task_id?: string;
+  /**
+   * Exactly 4 views in [front, left, back, right] order. The front view is
+   * mandatory and at least 2 views are required; pass `null` to skip one.
+   */
+  inputs?: Array<FileInput | null | undefined>;
+  /** Reuse the 4-view output of an `imageToMultiview` or `editMultiview` task. */
+  input_task_id?: string;
   model?: string;
+  texture_alignment?: 'original_image' | 'geometry';
+  orientation?: 'default' | 'align_image';
+  model_seed?: number;
+  texture_seed?: number;
+  texture?: boolean;
+  pbr?: boolean;
+  texture_quality?: 'standard' | 'detailed' | 'extreme';
+  geometry_quality?: 'standard' | 'detailed';
+  face_limit?: number;
+  auto_size?: boolean;
+  quad?: boolean;
+  smart_low_poly?: boolean;
+  generate_parts?: boolean;
+  compress?: string;
+  export_uv?: boolean;
+  export_orientation?: ExportOrientationValue;
+  [key: string]: any;
+}
+
+export interface TextToImageParams {
+  /** Required unless `template` is set. */
+  prompt?: string;
+  model?: ImageModelValue | (string & {});
+  /** A resolution tier such as `'2K'`, or exact pixels such as `'2048x2048'`. */
+  size?: string;
+  /** Only `chat_image_2` and the 2.5 models accept this; others reject the request. */
+  quality?: ImageQualityValue;
+  /** Only the 2.5 models honour this; others ignore it. */
+  background?: ImageBackgroundValue;
+  /** Only the banana models accept this; use `size` for seedream and chat_image. */
+  aspect_ratio?: AspectRatioValue;
+  output_format?: ImageFormatValue;
+  /** Only the seedream models honour this. */
+  watermark?: boolean;
+  template?: ImageTemplateValue;
+  [key: string]: any;
+}
+
+export interface ImageToImageParams {
+  /** A single reference image. Mutually exclusive with `inputs`. */
+  input?: FileInput;
+  /**
+   * Multiple reference images, referenced from `prompt` as `image[1]`,
+   * `image[2]` and so on. Max 4 for seedream, 10 for banana, 16 for
+   * chat_image. Mutually exclusive with `input`.
+   */
+  inputs?: FileInput[];
+  /** Required unless `template` is set. */
+  prompt?: string;
+  /** Note that `seedream_v4` is text-to-image only. */
+  model?: ImageModelValue | (string & {});
+  size?: string;
+  quality?: ImageQualityValue;
+  background?: ImageBackgroundValue;
+  aspect_ratio?: AspectRatioValue;
+  output_format?: ImageFormatValue;
+  template?: ImageTemplateValue;
+  [key: string]: any;
+}
+
+export interface EditMultiviewParams {
+  /**
+   * The `task_id` of an earlier successful multiview task. The API
+   * documents file_token and URL inputs too, but the service currently
+   * rejects anything that is not a task_id.
+   */
+  input: string;
+  /** 1 to 4 per-view edit instructions. */
+  prompts: MultiviewPrompt[];
   [key: string]: any;
 }
 
@@ -324,10 +521,10 @@ export class TripoClient {
   imageToModel(params: ImageToModelParams): Promise<string>;
   multiviewToModel(params: MultiviewToModelParams): Promise<string>;
 
-  textToImage(params: { prompt: string; model?: string; [key: string]: any }): Promise<string>;
-  imageToImage(params: { file?: FileInput; prompt?: string; [key: string]: any }): Promise<string>;
-  imageToMultiview(params: { file?: FileInput; [key: string]: any }): Promise<string>;
-  editMultiview(params: { original_task_id?: string; [key: string]: any }): Promise<string>;
+  textToImage(params: TextToImageParams): Promise<string>;
+  imageToImage(params: ImageToImageParams): Promise<string>;
+  imageToMultiview(params: { input: FileInput; [key: string]: any }): Promise<string>;
+  editMultiview(params: EditMultiviewParams): Promise<string>;
 
   textureModel(params: TextureModelParams): Promise<string>;
   convertModel(params: ConvertModelParams): Promise<string>;
@@ -359,6 +556,6 @@ export class TripoClient {
   ): Promise<{ url: string; contentType: string | null; data: ArrayBuffer } | null>;
 }
 
-export function toFileDescriptor(input: FileInput): FileDescriptor;
+export function toFileDescriptor(input: FileInput): string | FileDescriptor;
 
 export default TripoClient;

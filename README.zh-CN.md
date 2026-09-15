@@ -131,12 +131,18 @@ new TripoClient({
 
 ## 传入图片 / 文件
 
-任何接受图片的字段（`file`、`image_prompt`、`style_image` …）都支持以下形式，SDK 会自动归一化：
+所有接收图片或模型的接口都通过 `input` 字段传入。裸字符串会原样透传，由服务端推断它是什么：
 
 ```js
-'https://example.com/hero.png'          // 绝对 URL
-'8f2a4c...'                             // 已上传的 file_token
-{ file_token: '8f2a4c...' }             // 显式描述符
+'https://example.com/hero.png'          // 公开 URL
+'8f2a4c...'                             // uploadFile() 返回的 file_token
+previousTaskId                          // 复用上游任务的产物
+```
+
+如果想写得更明确，也可以传对象：
+
+```js
+{ file_token: '8f2a4c...' }
 { url: 'https://example.com/a.png' }
 { object: { bucket: 'tripo-data', key: 'uploads/abc.png' } }
 ```
@@ -153,8 +159,23 @@ const { file_token } = await client.uploadFile(buffer, {
 });
 
 const taskId = await client.imageToModel({
-  file: file_token,
+  input: file_token,
   model: 'v3.1-20260211',
+});
+```
+
+任务串联无需下载再上传，直接把上游 `task_id` 传进去即可：
+
+```js
+const imageId = await client.textToImage({
+  prompt: '一个低面数木质藏宝箱',
+  model: ImageModel.SEEDREAM_V5,
+});
+await client.waitForTask(imageId);
+
+const modelId = await client.imageToModel({
+  input: imageId,
+  model: ModelVersion.P2,
 });
 ```
 
@@ -173,8 +194,8 @@ const client = new TripoClient();
 
 // 1. 图生 3D（P1 系列有干净的低面拓扑，移动端 / 游戏友好）
 const modelId = await client.imageToModel({
-  file: 'https://example.com/hero.png',
-  model: ModelVersion.P1,
+  input: 'https://example.com/hero.png',
+  model: ModelVersion.P2,
   face_limit: 5000,
   texture: true,
 });
@@ -273,8 +294,10 @@ TaskStatus.SUCCESS         // 'success'
 Animation.WALK             // 'preset:walk'
 RigType.BIPED              // 'biped'
 RigSpec.MIXAMO             // 'mixamo'
-ModelVersion.H3_1          // 'v3.1-20260211'
-ModelVersion.P1            // 'P1-20260311'
+ModelVersion.H3_1                    // 'v3.1-20260211'
+ModelVersion.P2                      // 'P2-20260801'
+ImageModel.SEEDREAM_V5               // 'seedream_v5'
+ImageModel.CHAT_IMAGE_2_5_SUNBURST   // 'chat_image_2.5_sunburst'
 OutputFormat.FBX           // 'FBX'
 ```
 
@@ -302,9 +325,29 @@ OutputFormat.FBX           // 'FBX'
 | --- | --- | --- |
 | `ModelVersion.H3_1` | `v3.1-20260211` | 最高保真几何 + 完整高级参数（推荐） |
 | `ModelVersion.H3_0` | `v3.0-20250812` | H3 上一版本 |
+| `ModelVersion.H2_5` | `v2.5-20250123` | 旧版本，不支持 `geometry_quality` |
 | `ModelVersion.P1`   | `P1-20260311`   | 干净低面拓扑，游戏 / 移动端友好 |
-| `ModelVersion.H2_5` | `v2.5-20250123` | H2 稳定线 |
-| `ModelVersion.TURBO_V1` | `Turbo-v1.0-20250506` | 极速生成 |
+| `ModelVersion.P2`   | `P2-20260801`   | 新一代 P 系列，支持四边面输出。preview 版 |
+
+P 系列中只有 `ModelVersion.P2` 支持 `quad`，传给 `ModelVersion.P1` 会返回 `400`。P1 同样不支持 `smart_low_poly`、`generate_parts` 和 `geometry_quality`。
+
+### 生图模型（`model` 参数）
+
+用于 `textToImage` 与 `imageToImage`。
+
+| 常量 | 值 | 说明 |
+| --- | --- | --- |
+| `ImageModel.SEEDREAM_V5` | `seedream_v5` | 最强编辑、风格迁移与多图融合 |
+| `ImageModel.BANANA` | `banana` | 快速 |
+| `ImageModel.BANANA_PRO` | `banana_pro` | 更高质量 |
+| `ImageModel.BANANA2` | `banana2` | 最新快速选项 |
+| `ImageModel.CHAT_IMAGE_2` | `chat_image_2` | 质量最佳 |
+| `ImageModel.CHAT_IMAGE_2_5_FLARE` | `chat_image_2.5_flare` | 2.5 系列速度档 |
+| `ImageModel.CHAT_IMAGE_2_5_SUNBURST` | `chat_image_2.5_sunburst` | 2.5 系列精修档 |
+
+部分参数是分模型的：`quality` 仅 `chat_image_2` 和两个 2.5 模型支持（其它模型传入会直接报错），`background` 仅两个 2.5 模型支持，`aspect_ratio` 仅 banana 系列支持 —— seedream 和 chat_image 请改用 `size` 控制出图尺寸。
+
+`chat_image_1` 与 `chat_image_1.5` 已被有意移除：它们将分别于 2026-10-23 和 2026-12-01 下线。迁移期间如果仍需使用，可直接传字符串字面量。
 
 ---
 

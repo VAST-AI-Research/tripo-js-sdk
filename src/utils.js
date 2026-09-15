@@ -21,27 +21,23 @@ export function compact(obj) {
 }
 
 /**
- * Build the file descriptor the API expects.
+ * Normalise an image/model reference into the shape the API expects.
  *
- *   - a plain string is treated as an already-uploaded file_token,
- *     or a URL if it starts with `http`
+ *   - a plain string is passed through untouched, so the server can infer
+ *     whether it is a public URL, a `file_token`, or the `task_id` of an
+ *     earlier task whose output should be reused
  *   - a `{ file_token }` / `{ url }` / `{ object }` object is returned as-is
  *
  * @param {string | { file_token?: string, url?: string, object?: { bucket: string, key: string }, type?: string }} input
- * @returns {{ file_token?: string, url?: string, object?: { bucket: string, key: string }, type?: string }}
+ * @returns {string | { file_token?: string, url?: string, object?: { bucket: string, key: string }, type?: string }}
  */
 export function toFileDescriptor(input) {
   if (!input) throw new TypeError('File input is required.');
-  if (typeof input === 'string') {
-    if (input.startsWith('http://') || input.startsWith('https://')) {
-      return { url: input };
-    }
-    return { file_token: input };
-  }
+  if (typeof input === 'string') return input;
   if (typeof input === 'object') {
     if (input.file_token || input.url || input.object) return input;
   }
-  throw new TypeError('Unsupported file input. Provide a URL, file_token, or a descriptor object.');
+  throw new TypeError('Unsupported file input. Provide a URL, file_token, task_id, or a descriptor object.');
 }
 
 /**

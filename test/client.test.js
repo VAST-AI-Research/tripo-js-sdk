@@ -13,6 +13,12 @@ import {
   TripoTimeoutError,
   Animation,
   ModelVersion,
+  ImageModel,
+  ImageQuality,
+  ImageBackground,
+  ImageFormat,
+  ExportOrientation,
+  View,
   RigSpec,
   TaskStatus,
 } from '../src/index.js';
@@ -106,36 +112,164 @@ test('textToModel POSTs the expected payload and returns task_id', async () => {
   assert.equal(calls[0].headers.get('Authorization'), 'Bearer k');
 });
 
-test('imageToModel accepts a URL and coerces it to { url }', async () => {
+test('imageToModel forwards a bare input string for the server to infer', async () => {
   const { fn, calls } = makeFetch({
     'POST /v3/generation/image-to-model': ({ body }) => {
-      assert.deepEqual(body.file, { url: 'https://ex.com/a.png' });
+      assert.equal(body.input, 'https://ex.com/a.png');
       return { code: 0, data: { task_id: 'task_img' } };
     },
   });
   const client = new TripoClient({ apiKey: 'k', fetch: fn });
-  const id = await client.imageToModel({ file: 'https://ex.com/a.png' });
+  const id = await client.imageToModel({ input: 'https://ex.com/a.png' });
   assert.equal(id, 'task_img');
   assert.equal(calls.length, 1);
 });
 
-test('imageToModel accepts a bare file_token string', async () => {
+test('imageToModel accepts an explicit descriptor and export_orientation', async () => {
   const { fn } = makeFetch({
     'POST /v3/generation/image-to-model': ({ body }) => {
-      assert.deepEqual(body.file, { file_token: 'abc-123' });
+      assert.deepEqual(body.input, { file_token: 'abc-123' });
+      assert.equal(body.model, ModelVersion.P2);
+      assert.equal(body.export_orientation, ExportOrientation.MINUS_Y);
       return { code: 0, data: { task_id: 'task_img2' } };
     },
   });
   const client = new TripoClient({ apiKey: 'k', fetch: fn });
-  const id = await client.imageToModel({ file: 'abc-123' });
+  const id = await client.imageToModel({
+    input: { file_token: 'abc-123' },
+    model: ModelVersion.P2,
+    export_orientation: ExportOrientation.MINUS_Y,
+  });
   assert.equal(id, 'task_img2');
 });
 
-test('multiviewToModel validates the length of files', async () => {
+test('multiviewToModel sends 4 positional inputs with skipped views as empty strings', async () => {
+  const { fn } = makeFetch({
+    'POST /v3/generation/multiview-to-model': ({ body }) => {
+      assert.deepEqual(body.inputs, ['front.png', '', 'back.png', '']);
+      return { code: 0, data: { task_id: 'task_mv' } };
+    },
+  });
+  const client = new TripoClient({ apiKey: 'k', fetch: fn });
+  assert.equal(
+    await client.multiviewToModel({ inputs: ['front.png', null, 'back.png', null] }),
+    'task_mv'
+  );
+});
+
+test('multiviewToModel reuses a task_id through a single-element inputs array', async () => {
+  const { fn } = makeFetch({
+    'POST /v3/generation/multiview-to-model': ({ body }) => {
+      assert.deepEqual(body.inputs, [{ task_id: 'task_mv_src' }]);
+      return { code: 0, data: { task_id: 'task_mv' } };
+    },
+  });
+  const client = new TripoClient({ apiKey: 'k', fetch: fn });
+  assert.equal(await client.multiviewToModel({ input_task_id: 'task_mv_src' }), 'task_mv');
+});
+
+test('multiviewToModel rejects invalid inputs', async () => {
+  const client = new TripoClient({ apiKey: 'k', fetch: async () => new Response('{}') });
+  await assert.rejects(client.multiviewToModel({}), /inputs/);
+  await assert.rejects(
+    client.multiviewToModel({ inputs: ['a', 'b', 'c'] }),
+    /exactly 4 items/
+  );
+  await assert.rejects(
+    client.multiviewToModel({ inputs: [null, 'b', 'c', 'd'] }),
+    /front view/
+  );
+  await assert.rejects(
+    client.multiviewToModel({ inputs: ['a', null, null, null] }),
+    /at least 2 views/
+  );
+  await assert.rejects(
+    client.multiviewToModel({ inputs: ['a', 'b', null, null], input_task_id: 'x' }),
+    /mutually exclusive/
+  );
+});
+
+test('textToImage sends the new image parameters', async () => {
+  const { fn } = makeFetch({
+    'POST /v3/generation/text-to-image': ({ body }) => {
+      assert.equal(body.model, ImageModel.CHAT_IMAGE_2_5_SUNBURST);
+      assert.equal(body.quality, ImageQuality.MAX);
+      assert.equal(body.background, ImageBackground.TRANSPARENT);
+      assert.equal(body.output_format, ImageFormat.PNG);
+      return { code: 0, data: { task_id: 'task_t2i' } };
+    },
+  });
+  const client = new TripoClient({ apiKey: 'k', fetch: fn });
+  const id = await client.textToImage({
+    prompt: 'a glass sneaker',
+    model: ImageModel.CHAT_IMAGE_2_5_SUNBURST,
+    quality: ImageQuality.MAX,
+    background: ImageBackground.TRANSPARENT,
+    output_format: ImageFormat.PNG,
+  });
+  assert.equal(id, 'task_t2i');
+});
+
+test('imageToImage sends a model and multiple reference images', async () => {
+  const { fn } = makeFetch({
+    'POST /v3/generation/image-to-image': ({ body }) => {
+      assert.equal(body.model, ImageModel.SEEDREAM_V5);
+      assert.deepEqual(body.inputs, ['https://ex.com/a.png', 'ftok-b']);
+      assert.equal(body.input, undefined);
+      return { code: 0, data: { task_id: 'task_i2i' } };
+    },
+  });
+  const client = new TripoClient({ apiKey: 'k', fetch: fn });
+  const id = await client.imageToImage({
+    inputs: ['https://ex.com/a.png', 'ftok-b'],
+    model: ImageModel.SEEDREAM_V5,
+    prompt: 'use the character from image[1] and the outfit from image[2]',
+  });
+  assert.equal(id, 'task_i2i');
+});
+
+test('imageToImage rejects invalid inputs', async () => {
+  const client = new TripoClient({ apiKey: 'k', fetch: async () => new Response('{}') });
+  await assert.rejects(client.imageToImage({ prompt: 'x' }), /`input` or `inputs`/);
+  await assert.rejects(
+    client.imageToImage({ input: 'a', inputs: ['b'], prompt: 'x' }),
+    /mutually exclusive/
+  );
+  await assert.rejects(client.imageToImage({ input: 'a' }), /`prompt` is required/);
+});
+
+test('editMultiview sends per-view prompts', async () => {
+  const { fn } = makeFetch({
+    'POST /v3/generation/edit-multiview': ({ body }) => {
+      assert.equal(body.input, 'task_mv_src');
+      assert.deepEqual(body.prompts, [
+        { prompt: 'make the shirt red', view: View.FRONT },
+        { prompt: 'add a logo', view: View.BACK },
+      ]);
+      return { code: 0, data: { task_id: 'task_edit' } };
+    },
+  });
+  const client = new TripoClient({ apiKey: 'k', fetch: fn });
+  const id = await client.editMultiview({
+    input: 'task_mv_src',
+    prompts: [
+      { prompt: 'make the shirt red', view: View.FRONT },
+      { prompt: 'add a logo', view: View.BACK },
+    ],
+  });
+  assert.equal(id, 'task_edit');
+});
+
+test('editMultiview rejects a missing input or an out-of-range prompt list', async () => {
   const client = new TripoClient({ apiKey: 'k', fetch: async () => new Response('{}') });
   await assert.rejects(
-    client.multiviewToModel({ files: ['a', 'b', 'c'] }),
-    /exactly 4 items/
+    client.editMultiview({ prompts: [{ prompt: 'x', view: View.FRONT }] }),
+    /`input` is required/
+  );
+  await assert.rejects(client.editMultiview({ input: 'task_mv_src' }), /1 to 4 items/);
+  await assert.rejects(
+    client.editMultiview({ input: 'task_mv_src', prompts: new Array(5).fill({ prompt: 'x', view: View.FRONT }) }),
+    /1 to 4 items/
   );
 });
 

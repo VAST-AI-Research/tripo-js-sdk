@@ -34,8 +34,8 @@ async function stage(label, taskId) {
 
 // 1. Generate a base 3D model — the P1 line has clean, low-poly topology.
 const modelTaskId = await client.imageToModel({
-  file: imageUrl,
-  model: ModelVersion.P1,
+  input: imageUrl,
+  model: ModelVersion.P2,
   face_limit: 5000,
   texture: true,
 });

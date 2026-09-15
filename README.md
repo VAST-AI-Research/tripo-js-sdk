@@ -139,13 +139,20 @@ Every generation method returns a `task_id` (`string`). Use `waitForTask()`
 
 ## Passing images / files
 
-Any method that accepts an image (`file`, `image_prompt`, `style_image`, …)
-takes one of:
+Every endpoint that takes an image or model accepts it through an `input`
+field. A bare string is forwarded untouched so the server can infer what it
+is:
 
 ```js
-'https://example.com/hero.png'          // absolute URL
-'8f2a4c...'                             // a bare file_token from uploadFile()
-{ file_token: '8f2a4c...' }             // explicit descriptor
+'https://example.com/hero.png'          // a public URL
+'8f2a4c...'                             // a file_token from uploadFile()
+previousTaskId                          // reuse an earlier task's output
+```
+
+Pass an object when you'd rather be explicit:
+
+```js
+{ file_token: '8f2a4c...' }
 { url: 'https://example.com/a.png' }
 { object: { bucket: 'tripo-data', key: 'uploads/abc.png' } }
 ```
@@ -161,7 +168,23 @@ const { file_token } = await client.uploadFile(buffer, {
   contentType: 'image/png',
 });
 
-const taskId = await client.imageToModel({ file: file_token, model: 'v3.1-20260211' });
+const taskId = await client.imageToModel({ input: file_token, model: 'v3.1-20260211' });
+```
+
+Chaining tasks needs no download-and-reupload round trip — pass the upstream
+`task_id` straight in:
+
+```js
+const imageId = await client.textToImage({
+  prompt: 'a low-poly wooden treasure chest',
+  model: ImageModel.SEEDREAM_V5,
+});
+await client.waitForTask(imageId);
+
+const modelId = await client.imageToModel({
+  input: imageId,
+  model: ModelVersion.P2,
+});
 ```
 
 ---
@@ -175,10 +198,10 @@ import {
 
 const client = new TripoClient();
 
-// 1. Image → 3D (low-poly P1 topology, mobile/game friendly)
+// 1. Image → 3D (low-poly P series topology, mobile/game friendly)
 const modelId = await client.imageToModel({
-  file: 'https://example.com/hero.png',
-  model: ModelVersion.P1,
+  input: 'https://example.com/hero.png',
+  model: ModelVersion.P2,
   face_limit: 5000,
   texture: true,
 });
@@ -258,10 +281,42 @@ TaskStatus.SUCCESS         // 'success'
 Animation.WALK             // 'preset:walk'
 RigType.BIPED              // 'biped'
 RigSpec.MIXAMO             // 'mixamo'
-ModelVersion.H3_1          // 'v3.1-20260211'
-ModelVersion.P1            // 'P1-20260311'
+ModelVersion.H3_1                    // 'v3.1-20260211'
+ModelVersion.P2                      // 'P2-20260801'
+ImageModel.SEEDREAM_V5               // 'seedream_v5'
+ImageModel.CHAT_IMAGE_2_5_SUNBURST   // 'chat_image_2.5_sunburst'
 OutputFormat.FBX           // 'FBX'
 ```
+
+### 3D generation models
+
+| Constant | Value | Notes |
+| --- | --- | --- |
+| `ModelVersion.H3_1` | `v3.1-20260211` | Latest, best quality (default) |
+| `ModelVersion.H3_0` | `v3.0-20250812` | Stable, advanced features |
+| `ModelVersion.H2_5` | `v2.5-20250123` | Legacy; does not accept `geometry_quality` |
+| `ModelVersion.P1` | `P1-20260311` | Low-poly, clean topology |
+| `ModelVersion.P2` | `P2-20260801` | Next-gen P series, quad output. Preview |
+
+`quad` is accepted only by `ModelVersion.P2` within the P series — sending it with `ModelVersion.P1` returns a `400`. P1 also rejects `smart_low_poly`, `generate_parts`, and `geometry_quality`.
+
+### Image generation models
+
+Used by `textToImage` and `imageToImage`.
+
+| Constant | Value | Notes |
+| --- | --- | --- |
+| `ImageModel.SEEDREAM_V5` | `seedream_v5` | Strongest editing, style transfer, multi-image fusion |
+| `ImageModel.BANANA` | `banana` | Fast |
+| `ImageModel.BANANA_PRO` | `banana_pro` | Higher quality |
+| `ImageModel.BANANA2` | `banana2` | Latest fast option |
+| `ImageModel.CHAT_IMAGE_2` | `chat_image_2` | Best quality |
+| `ImageModel.CHAT_IMAGE_2_5_FLARE` | `chat_image_2.5_flare` | 2.5 speed tier |
+| `ImageModel.CHAT_IMAGE_2_5_SUNBURST` | `chat_image_2.5_sunburst` | 2.5 fidelity tier |
+
+A few parameters are model-specific: `quality` is accepted only by `chat_image_2` and the 2.5 models (other models reject the request), `background` only by the 2.5 models, and `aspect_ratio` only by the banana models — seedream and chat_image size their output through `size` instead.
+
+`chat_image_1` and `chat_image_1.5` are omitted deliberately: they retire on 2026-10-23 and 2026-12-01 respectively. Pass them as a raw string if you still need them during migration.
 
 Every constant is a plain string — you can also pass raw literals if you
 prefer (the SDK never re-validates the value against the enum).
