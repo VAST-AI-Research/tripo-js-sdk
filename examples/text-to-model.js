@@ -9,7 +9,7 @@
  */
 
 import { writeFile } from 'node:fs/promises';
-import { TripoClient, ModelVersion, TaskStatus } from '../src/index.js';
+import { TripoClient, ModelVersion, TaskStatus, modelFilename } from '../src/index.js';
 
 const prompt = process.argv.slice(2).join(' ') || 'a cute red panda holding bamboo';
 
@@ -48,7 +48,7 @@ if (!downloaded) {
   process.exit(0);
 }
 
-const filename = `tripo-${taskId}.glb`;
+const filename = modelFilename(downloaded, `tripo-${taskId}`);
 await writeFile(filename, Buffer.from(downloaded.data));
 console.log(`> saved ${filename} (${downloaded.data.byteLength.toLocaleString()} bytes)`);
 console.log(`> preview: ${task.output?.rendered_image_url ?? task.output?.rendered_image ?? '(none)'}`);

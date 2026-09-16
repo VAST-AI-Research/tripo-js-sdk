@@ -12,7 +12,7 @@
 import { readFile } from 'node:fs/promises';
 import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { TripoClient, ModelVersion } from '../src/index.js';
+import { TripoClient, ModelVersion, modelFilename } from '../src/index.js';
 
 const inputArg = process.argv[2];
 if (!inputArg) {
@@ -52,7 +52,7 @@ process.stdout.write('\n');
 
 const dl = await client.downloadModel(task);
 if (dl) {
-  const filename = `tripo-${taskId}.glb`;
+  const filename = modelFilename(dl, `tripo-${taskId}`);
   await writeFile(filename, Buffer.from(dl.data));
   console.log(`> saved ${filename} (${dl.data.byteLength.toLocaleString()} bytes)`);
 }

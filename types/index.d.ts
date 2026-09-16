@@ -332,6 +332,11 @@ export interface TextToModelParams {
   geometry_quality?: 'standard' | 'detailed';
   face_limit?: number;
   auto_size?: boolean;
+  /**
+   * Outputs a quad mesh instead of triangles, which forces the output
+   * format to FBX rather than GLB. Within the P series only
+   * `ModelVersion.P2` accepts it.
+   */
   quad?: boolean;
   smart_low_poly?: boolean;
   generate_parts?: boolean;
@@ -357,6 +362,11 @@ export interface ImageToModelParams {
   face_limit?: number;
   auto_size?: boolean;
   orientation?: 'default' | 'align_image';
+  /**
+   * Outputs a quad mesh instead of triangles, which forces the output
+   * format to FBX rather than GLB. Within the P series only
+   * `ModelVersion.P2` accepts it.
+   */
   quad?: boolean;
   smart_low_poly?: boolean;
   generate_parts?: boolean;
@@ -386,6 +396,11 @@ export interface MultiviewToModelParams {
   geometry_quality?: 'standard' | 'detailed';
   face_limit?: number;
   auto_size?: boolean;
+  /**
+   * Outputs a quad mesh instead of triangles, which forces the output
+   * format to FBX rather than GLB. Within the P series only
+   * `ModelVersion.P2` accepts it.
+   */
   quad?: boolean;
   smart_low_poly?: boolean;
   generate_parts?: boolean;
@@ -557,5 +572,20 @@ export class TripoClient {
 }
 
 export function toFileDescriptor(input: FileInput): string | FileDescriptor;
+
+/**
+ * The lower-case file extension of a model URL without the leading dot
+ * (e.g. `'glb'`, `'fbx'`), or `''` if the URL carries none.
+ *
+ * Do not assume GLB: setting `quad` on a generation task forces FBX output,
+ * and `convertModel` emits whichever format was requested.
+ */
+export function modelExtension(url: string): string;
+
+/**
+ * A download-ready `<name>.<ext>` for a downloaded model, falling back to
+ * `glb` when the URL carries no extension.
+ */
+export function modelFilename(downloaded: { url: string }, name: string): string;
 
 export default TripoClient;

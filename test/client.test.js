@@ -21,6 +21,8 @@ import {
   View,
   RigSpec,
   TaskStatus,
+  modelExtension,
+  modelFilename,
 } from '../src/index.js';
 
 /**
@@ -411,4 +413,16 @@ test('HTTP 500 with non-envelope body triggers retries then TripoRequestError', 
   const client = new TripoClient({ apiKey: 'k', fetch: fn, retries: 2 });
   await assert.rejects(client.getBalance(), /HTTP 500/);
   assert.equal(attempts, 3);
+});
+
+test('modelExtension tracks the URL rather than assuming GLB', () => {
+  // quad=true generations return FBX, so the extension cannot be assumed.
+  assert.equal(modelExtension('https://cdn/a/model.glb'), 'glb');
+  assert.equal(modelExtension('https://cdn/a/model.fbx?auth_key=1-abc-0-def'), 'fbx');
+  assert.equal(modelExtension('https://cdn/a/model.USDZ#frag'), 'usdz');
+  assert.equal(modelExtension('https://cdn/a/model'), '');
+  assert.equal(modelExtension('https://cdn/a.b/model?x=1'), '');
+
+  assert.equal(modelFilename({ url: 'https://cdn/a/model.fbx?k=1' }, 'out'), 'out.fbx');
+  assert.equal(modelFilename({ url: 'https://cdn/a/model' }, 'out'), 'out.glb');
 });

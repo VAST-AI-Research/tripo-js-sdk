@@ -63,3 +63,32 @@ export function sleep(ms, signal) {
 function abortReason(signal) {
   return signal?.reason ?? new DOMException('Aborted', 'AbortError');
 }
+
+/**
+ * Extract the lower-case file extension of a model URL, without the leading
+ * dot (e.g. `'glb'`, `'fbx'`), or `''` if the URL carries none.
+ *
+ * Do not assume GLB: setting `quad` on a generation task forces FBX output,
+ * and `convertModel` emits whichever format was requested.
+ *
+ * @param {string} url
+ * @returns {string}
+ */
+export function modelExtension(url) {
+  if (!url) return '';
+  const name = url.split(/[?#]/, 1)[0].split('/').pop() ?? '';
+  const i = name.lastIndexOf('.');
+  return i < 0 ? '' : name.slice(i + 1).toLowerCase();
+}
+
+/**
+ * Build a download-ready `<name>.<ext>` for a downloaded model, falling back
+ * to `glb` when the URL carries no extension.
+ *
+ * @param {{ url: string }} downloaded
+ * @param {string} name
+ * @returns {string}
+ */
+export function modelFilename(downloaded, name) {
+  return `${name}.${modelExtension(downloaded?.url) || 'glb'}`;
+}

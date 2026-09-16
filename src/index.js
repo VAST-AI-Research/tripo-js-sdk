@@ -45,7 +45,7 @@ export {
   TripoTimeoutError,
 } from './errors.js';
 
-export { toFileDescriptor } from './utils.js';
+export { toFileDescriptor, modelExtension, modelFilename } from './utils.js';
 
 import { TripoClient } from './client.js';
 export default TripoClient;

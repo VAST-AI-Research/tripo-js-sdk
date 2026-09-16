@@ -163,6 +163,8 @@ export class TripoClient {
    *   geometry_quality?: 'standard' | 'detailed',
    *   face_limit?: number,
    *   auto_size?: boolean,
+   *   // `quad` forces the output format to FBX rather than GLB, and within
+   *   // the P series only `ModelVersion.P2` accepts it.
    *   quad?: boolean,
    *   smart_low_poly?: boolean,
    *   generate_parts?: boolean,
@@ -197,6 +199,8 @@ export class TripoClient {
    *   face_limit?: number,
    *   auto_size?: boolean,
    *   orientation?: 'default' | 'align_image',
+   *   // `quad` forces the output format to FBX rather than GLB, and within
+   *   // the P series only `ModelVersion.P2` accepts it.
    *   quad?: boolean,
    *   smart_low_poly?: boolean,
    *   generate_parts?: boolean,
