@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 import {
   TripoClient,
   TripoAPIError,
+  TripoRequestError,
   TripoTaskError,
   TripoTimeoutError,
   Animation,
@@ -425,4 +426,114 @@ test('modelExtension tracks the URL rather than assuming GLB', () => {
 
   assert.equal(modelFilename({ url: 'https://cdn/a/model.fbx?k=1' }, 'out'), 'out.fbx');
   assert.equal(modelFilename({ url: 'https://cdn/a/model' }, 'out'), 'out.glb');
+});
+
+// ─────────────────── Retry safety (billing-sensitive) ────────────────────
+//
+// Task-creation endpoints are billed per submission, so a POST must never be
+// replayed once the server may have seen it. These tests pin the exact number
+// of times the transport is invoked.
+
+/** A fetch stub that counts invocations and always fails the same way. */
+function failingFetch(fail) {
+  let calls = 0;
+  const fn = async () => {
+    calls += 1;
+    return fail();
+  };
+  fn.calls = () => calls;
+  return fn;
+}
+
+const netFail = (code) => () => {
+  throw Object.assign(new TypeError('fetch failed'), { cause: { code } });
+};
+
+const statusFail = (status) => () =>
+  new Response(JSON.stringify({ code: 1000, message: 'nope' }), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+async function attempt(fetchImpl, call) {
+  const client = new TripoClient({ apiKey: 'k', fetch: fetchImpl });
+  try {
+    await call(client);
+    return null;
+  } catch (err) {
+    return err;
+  }
+}
+
+const billableCall = (c) => c.imageToImage({ prompt: 'x', input: 'https://e.com/a.png' });
+
+test('billable POST is not replayed when the connection drops mid-flight', async () => {
+  // ECONNRESET can arrive after the server accepted and billed the request.
+  const f = failingFetch(netFail('ECONNRESET'));
+  const err = await attempt(f, billableCall);
+  assert.equal(f.calls(), 1, 'must submit exactly once');
+  assert.ok(err instanceof TripoRequestError);
+  assert.equal(err.indeterminate, true);
+  assert.match(err.message, /may already have accepted/);
+});
+
+test('billable POST is replayed when the connection was never established', async () => {
+  // ECONNREFUSED proves the request never reached a handler.
+  const f = failingFetch(netFail('ECONNREFUSED'));
+  const err = await attempt(f, billableCall);
+  assert.equal(f.calls(), 3, 'safe to retry: default retries = 2');
+  assert.equal(err.indeterminate, false);
+});
+
+test('billable POST is replayed on 429, which the server declined outright', async () => {
+  const f = failingFetch(statusFail(429));
+  await attempt(f, billableCall);
+  assert.equal(f.calls(), 3);
+});
+
+test('billable POST is not replayed on 500 and reports indeterminate state', async () => {
+  // A 500 may be raised after the task was already created.
+  const f = failingFetch(statusFail(500));
+  const err = await attempt(f, billableCall);
+  assert.equal(f.calls(), 1);
+  assert.equal(err.indeterminate, true);
+});
+
+test('billable POST is not replayed on a 504 from an intermediary', async () => {
+  const f = failingFetch(statusFail(504));
+  const err = await attempt(f, billableCall);
+  assert.equal(f.calls(), 1);
+  assert.equal(err.indeterminate, true);
+});
+
+test('idempotent GET is still retried on the same transient failures', async () => {
+  for (const fail of [netFail('ECONNRESET'), statusFail(500), statusFail(429)]) {
+    const f = failingFetch(fail);
+    const err = await attempt(f, (c) => c.getTask('t1'));
+    assert.equal(f.calls(), 3);
+    if (err instanceof TripoRequestError) assert.equal(err.indeterminate, false);
+  }
+});
+
+test('retries: 0 disables retries for idempotent reads too', async () => {
+  const f = failingFetch(netFail('ECONNRESET'));
+  const client = new TripoClient({ apiKey: 'k', fetch: f, retries: 0 });
+  await client.getTask('t1').catch(() => {});
+  assert.equal(f.calls(), 1);
+});
+
+test('TripoTaskError reads the current error_message field', async () => {
+  const { fn } = makeFetch({
+    'GET /v3/tasks/t_fail': () =>
+      okTask('t_fail', { status: 'failed', error_code: 42, error_message: 'bad input' }),
+  });
+  const client = new TripoClient({ apiKey: 'k', fetch: fn });
+  await assert.rejects(
+    () => client.waitForTask('t_fail', { pollingIntervalMs: 1 }),
+    (err) => {
+      assert.equal(err.errorMessage, 'bad input');
+      assert.match(err.message, /bad input/);
+      return true;
+    }
+  );
 });

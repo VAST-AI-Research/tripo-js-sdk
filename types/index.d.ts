@@ -277,6 +277,13 @@ export class TripoRequestError extends TripoError {
   status?: number;
   statusText?: string;
   body?: unknown;
+  /**
+   * True when the request may have been processed by the server despite the
+   * failure, so the SDK deliberately did not retry it. Resubmitting a billed
+   * task-creation request in this state risks being charged twice; reconcile
+   * against `listTasks()` first.
+   */
+  indeterminate: boolean;
 }
 
 export class TripoAPIError extends TripoError {

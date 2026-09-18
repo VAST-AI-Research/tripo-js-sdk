@@ -4,14 +4,61 @@
  * Responsibilities:
  *   - Attach `Authorization: Bearer …` header.
  *   - Serialize JSON bodies (or pass through FormData / streams).
- *   - Retry idempotent requests on transient errors with exponential back-off.
+ *   - Retry on transient errors with exponential back-off, but only when the
+ *     server cannot have processed the request: non-idempotent calls (every
+ *     task-creation POST) are never replayed once they may have landed, since
+ *     those are billed per submission.
  *   - Parse the standard `{ code, data, message, suggestion }` envelope and
  *     raise `TripoAPIError` / `TripoRequestError` as appropriate.
  */
 
 import { TripoAPIError, TripoRequestError } from './errors.js';
 
-const DEFAULT_RETRY_STATUS = new Set([408, 425, 429, 500, 502, 503, 504]);
+/**
+ * Retry safety classification.
+ *
+ * A retry is only safe when the server cannot have acted on the request.
+ * Task-creation endpoints are billed per submission, so retrying a request
+ * that may already have been processed can charge the caller twice.
+ *
+ * `'clean'`   — the request provably never reached the handler; safe to
+ *               retry regardless of method.
+ * `'unknown'` — the request may or may not have been processed; only safe to
+ *               retry when the method is idempotent.
+ * `'fatal'`   — not a transient failure; never retry.
+ */
+
+// Connection never established, so the request was never sent.
+const CLEAN_ERROR_CODES = new Set([
+  'ECONNREFUSED',
+  'ENOTFOUND',
+  'EAI_AGAIN',
+  'EHOSTUNREACH',
+  'ENETUNREACH',
+  'UND_ERR_CONNECT_TIMEOUT',
+]);
+
+// The request was (or may have been) sent before the failure surfaced.
+const UNKNOWN_ERROR_CODES = new Set([
+  'ECONNRESET',
+  'ETIMEDOUT',
+  'EPIPE',
+  'UND_ERR_SOCKET',
+  'UND_ERR_HEADERS_TIMEOUT',
+  'UND_ERR_BODY_TIMEOUT',
+]);
+
+// The server answered and told us it declined to process the request.
+const CLEAN_RETRY_STATUS = new Set([429, 503]);
+
+// The server answered, but whether it processed the request is unknowable
+// from the status alone (a 504 in particular is often emitted by a proxy
+// after the origin already accepted the work).
+const UNKNOWN_RETRY_STATUS = new Set([408, 425, 500, 502, 504]);
+
+const INDETERMINATE_HINT =
+  'The server may already have accepted this request, so it was not retried automatically. ' +
+  'Check your task list before resubmitting to avoid being billed twice.';
 
 /**
  * @typedef {Object} RequestOptions
@@ -23,6 +70,9 @@ const DEFAULT_RETRY_STATUS = new Set([408, 425, 429, 500, 502, 503, 504]);
  * @property {AbortSignal} [signal]
  * @property {number} [timeoutMs]          Per-request timeout (default: client default).
  * @property {number} [retries]            Extra attempts on transient failures.
+ * @property {boolean} [idempotent]        Overrides the method-derived default.
+ *   Non-idempotent requests are not retried once the server may have seen
+ *   them; set this to `true` only if the endpoint deduplicates submissions.
  * @property {boolean} [raw]               When true, resolve with the raw Response.
  */
 
@@ -53,7 +103,7 @@ export class HttpClient {
     this.timeoutMs = config.timeoutMs ?? 60_000;
     this.retries = config.retries ?? 2;
     this.defaultHeaders = {
-      'User-Agent': config.userAgent ?? '@vastai/tripo-sdk/0.1.1',
+      'User-Agent': config.userAgent ?? '@vastai/tripo-sdk/0.2.0',
       ...config.defaultHeaders,
     };
   }
@@ -82,6 +132,7 @@ export class HttpClient {
     }
 
     const totalAttempts = Math.max(1, (options.retries ?? this.retries) + 1);
+    const idempotent = options.idempotent ?? isIdempotentMethod(method);
     let lastError;
 
     for (let attempt = 1; attempt <= totalAttempts; attempt++) {
@@ -102,11 +153,22 @@ export class HttpClient {
       } catch (err) {
         clearTimeout(timer);
         options.signal?.removeEventListener('abort', abortForward);
-        lastError = new TripoRequestError(
-          err?.name === 'AbortError' ? `Request aborted after ${timeoutMs}ms` : `Network error: ${err?.message ?? err}`,
-          { cause: err }
-        );
-        if (!isRetryableError(err) || attempt === totalAttempts) throw lastError;
+
+        const cancelled = options.signal?.aborted === true;
+        const safety = cancelled ? 'fatal' : classifyError(err);
+        const willRetry = canRetry(safety, idempotent) && attempt < totalAttempts;
+        const indeterminate = !willRetry && safety === 'unknown' && !idempotent;
+
+        let message;
+        if (cancelled) message = 'Request cancelled by caller';
+        else if (err?.name === 'AbortError') message = `Request timed out after ${timeoutMs}ms`;
+        else message = `Network error: ${err?.message ?? err}`;
+
+        lastError = new TripoRequestError(indeterminate ? `${message}. ${INDETERMINATE_HINT}` : message, {
+          cause: err,
+          indeterminate,
+        });
+        if (!willRetry) throw lastError;
         await sleep(backoffMs(attempt));
         continue;
       }
@@ -118,13 +180,25 @@ export class HttpClient {
 
       if (!response.ok) {
         const parsed = await safeReadJson(response);
-        if (isRetryableStatus(response.status) && attempt < totalAttempts) {
+        const safety = classifyStatus(response.status);
+        if (canRetry(safety, idempotent) && attempt < totalAttempts) {
           lastError = new TripoRequestError(
             `HTTP ${response.status} ${response.statusText}`,
             { status: response.status, statusText: response.statusText, body: parsed }
           );
           await sleep(backoffMs(attempt, response.headers.get('Retry-After')));
           continue;
+        }
+        if (safety === 'unknown' && !idempotent) {
+          throw new TripoRequestError(
+            `HTTP ${response.status} ${response.statusText}. ${INDETERMINATE_HINT}`,
+            {
+              status: response.status,
+              statusText: response.statusText,
+              body: parsed,
+              indeterminate: true,
+            }
+          );
         }
         if (parsed && typeof parsed === 'object' && 'code' in parsed) {
           throw new TripoAPIError({
@@ -185,22 +259,37 @@ async function safeReadJson(response) {
   }
 }
 
-function isRetryableStatus(status) {
-  return DEFAULT_RETRY_STATUS.has(status);
+function isIdempotentMethod(method) {
+  return method === 'GET' || method === 'HEAD' || method === 'OPTIONS';
 }
 
-function isRetryableError(err) {
-  if (!err) return false;
+/** @returns {'clean'|'unknown'|'fatal'} */
+function classifyStatus(status) {
+  if (CLEAN_RETRY_STATUS.has(status)) return 'clean';
+  if (UNKNOWN_RETRY_STATUS.has(status)) return 'unknown';
+  return 'fatal';
+}
+
+/** @returns {'clean'|'unknown'|'fatal'} */
+function classifyError(err) {
+  if (!err) return 'fatal';
+  // A timeout fired by our own AbortController: the request was already on
+  // the wire, so the server may well have processed it.
+  if (err.name === 'AbortError') return 'unknown';
   const code = err.code ?? err.cause?.code;
-  return (
-    err.name === 'FetchError' ||
-    code === 'ECONNRESET' ||
-    code === 'ETIMEDOUT' ||
-    code === 'ECONNREFUSED' ||
-    code === 'EAI_AGAIN' ||
-    code === 'ENOTFOUND' ||
-    code === 'UND_ERR_SOCKET'
-  );
+  if (CLEAN_ERROR_CODES.has(code)) return 'clean';
+  if (UNKNOWN_ERROR_CODES.has(code)) return 'unknown';
+  // Undici surfaces a bare `TypeError: fetch failed` for socket teardown
+  // without always tagging a code; treat the unrecognised transport failure
+  // as unknown rather than assuming it never landed.
+  if (err.name === 'TypeError' || err.name === 'FetchError') return 'unknown';
+  return 'fatal';
+}
+
+function canRetry(safety, idempotent) {
+  if (safety === 'clean') return true;
+  if (safety === 'unknown') return idempotent;
+  return false;
 }
 
 function backoffMs(attempt, retryAfterHeader) {

@@ -19,14 +19,26 @@ export class TripoError extends Error {
 export class TripoRequestError extends TripoError {
   /**
    * @param {string} message
-   * @param {{ status?: number, statusText?: string, body?: unknown, cause?: unknown }} [options]
+   * @param {{
+   *   status?: number,
+   *   statusText?: string,
+   *   body?: unknown,
+   *   cause?: unknown,
+   *   indeterminate?: boolean,
+   * }} [options]
    */
-  constructor(message, { status, statusText, body, cause } = {}) {
+  constructor(message, { status, statusText, body, cause, indeterminate = false } = {}) {
     super(message, { cause });
     this.name = 'TripoRequestError';
     this.status = status;
     this.statusText = statusText;
     this.body = body;
+    /**
+     * True when the request may have been processed despite the failure.
+     * Resubmitting a billed task-creation request in this state risks being
+     * charged twice; reconcile against the task list first.
+     */
+    this.indeterminate = indeterminate;
   }
 }
 
@@ -51,16 +63,17 @@ export class TripoTaskError extends TripoError {
    * @param {import('./types.js').Task} task
    */
   constructor(task) {
+    const detail = task.error_message ?? task.error_msg;
     super(
       `Task ${task.task_id} ended with status "${task.status}"` +
-        (task.error_msg ? `: ${task.error_msg}` : '') +
+        (detail ? `: ${detail}` : '') +
         (task.error_code !== undefined ? ` (error_code=${task.error_code})` : '')
     );
     this.name = 'TripoTaskError';
     this.task = task;
     this.status = task.status;
     this.errorCode = task.error_code;
-    this.errorMessage = task.error_msg;
+    this.errorMessage = detail;
   }
 }
 
