@@ -103,7 +103,7 @@ export class HttpClient {
     this.timeoutMs = config.timeoutMs ?? 60_000;
     this.retries = config.retries ?? 2;
     this.defaultHeaders = {
-      'User-Agent': config.userAgent ?? '@vastai/tripo-sdk/0.2.0',
+      'User-Agent': config.userAgent ?? '@vastai/tripo-sdk/0.3.0',
       ...config.defaultHeaders,
     };
   }
