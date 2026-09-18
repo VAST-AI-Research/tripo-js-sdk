@@ -1,0 +1,49 @@
+name: Publish to npm
+
+# Publishes via npm Trusted Publishing (OIDC) — no NPM_TOKEN, no repository
+# secret. npm verifies the workflow identity instead, which is why the
+# filename must stay `publish.yml` to match the Trusted Publisher entry
+# registered on npmjs.com.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write # lets GitHub mint the OIDC token npm authenticates against
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest # trusted publishing requires a GitHub-hosted runner
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+
+      # Trusted publishing needs npm >= 11.5.1, which can be newer than the
+      # npm bundled with the Node release above.
+      - name: Ensure npm supports trusted publishing
+        run: npm install -g npm@latest
+
+      - name: Check the tag matches the package version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg="$(node -p "require('./package.json').version")"
+          if [ "$tag" != "$pkg" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match package.json version $pkg" >&2
+            exit 1
+          fi
+
+      - name: Test
+        run: npm test
+
+      # No NODE_AUTH_TOKEN: the npm CLI detects the OIDC flow on its own and
+      # attaches build provenance automatically.
+      - name: Publish
+        run: npm publish --access public
