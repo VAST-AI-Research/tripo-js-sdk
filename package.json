@@ -30,7 +30,8 @@
     "prepublishOnly": "npm test",
     "example:text": "node examples/text-to-model.js",
     "example:image": "node examples/image-to-model.js",
-    "example:rig": "node examples/rig-and-animate.js"
+    "example:rig": "node examples/rig-and-animate.js",
+    "check:examples": "node scripts/check-examples.mjs"
   },
   "keywords": [
     "tripo3d",

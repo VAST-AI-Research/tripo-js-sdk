@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 18 is the floor declared in `engines`; the rest cover the releases
+        # users are realistically on.
+        node: ['18', '20', '22', '24']
+    name: test (node ${{ matrix.node }})
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      # The package has no dependencies, so there is nothing to install and
+      # no lockfile for `npm ci` to consume.
+      - name: Test
+        run: npm test
+
+  types:
+    runs-on: ubuntu-latest
+    name: typecheck
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      # The hand-written .d.ts drifts from the JS unless something checks it.
+      - name: Typecheck declarations
+        run: npx --yes -p typescript tsc --noEmit --strict types/index.d.ts
+
+  examples:
+    runs-on: ubuntu-latest
+    name: examples parse
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Check examples parse
+        run: for f in examples/*.js; do node --check "$f"; done
+
+      - name: Check example imports resolve
+        run: npm run check:examples
